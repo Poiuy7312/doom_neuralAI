@@ -16,10 +16,15 @@ import torch.nn as nn
 import torch.optim as optim
 from tqdm import trange
 
+from pathlib import Path
+
+file_path = Path("action_log.txt")
+
 import vizdoom as vzd
 
 
 # Q-learning settings
+file_path.touch()
 learning_rate = 0.00025
 discount_factor = 0.99
 train_epochs = 5
@@ -35,14 +40,28 @@ test_episodes_per_epoch = 100
 
 # Other parameters
 resolution = (30, 45)
-frame_repeat = 12
-episodes_to_watch = 20
+frame_repeat = 4
+episodes_to_watch = 40
 
 model_savefile = "./model-doom-delay.pth"
-save_model = True
-load_model = False
-skip_learning = False
+save_model = False
+load_model = True
+skip_learning = True
 delay_response = True
+
+if delay_response:
+    file_path = Path("action_log_delay.txt")
+else:
+    file_path = Path("action_log.txt")
+
+
+def actions_to_human_readable(game, action):
+    buttons = game.get_available_buttons()
+    used_button = ""
+    for i in range(len(action)):
+        if action[i] == 1:
+            used_button += str(buttons[i]) + "\n"
+    return used_button
 
 
 # Configuration file path
@@ -121,7 +140,7 @@ def run(game, agent, actions, num_epochs, frame_repeat, steps_per_epoch=2000):
             state = preprocess(game.get_state().screen_buffer)
             action = agent.get_action(state)
             if delay_response:
-                frame_repeat = random.randint(9, 15)
+                frame_repeat = random.randint(6, 15)
             reward = game.make_action(actions[action], frame_repeat)
             done = game.is_episode_finished()
 
@@ -347,6 +366,7 @@ if __name__ == "__main__":
     game.init()
     count = 0
     total = 0
+    log_actions = []
     for _ in range(episodes_to_watch):
         game.new_episode()
         while not game.is_episode_finished():
@@ -355,7 +375,9 @@ if __name__ == "__main__":
 
             # Instead of make_action(a, frame_repeat) in order to make the animation smooth
             game.set_action(actions[best_action_index])
-            frame_repeat = random.randint(9, 15)
+            log_actions.append(actions[best_action_index])
+            if delay_response:
+                frame_repeat = random.randint(9, 15)
             for _ in range(frame_repeat):
                 game.advance_action()
 
@@ -364,4 +386,8 @@ if __name__ == "__main__":
         score = game.get_total_reward()
         count += 1
         total += score
+
         print("Total score: ", score)
+    with open(file_path, "a") as file:
+        for act in log_actions:
+            file.write(str(actions_to_human_readable(game, act)))
