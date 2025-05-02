@@ -34,17 +34,19 @@ batch_size = 64
 test_episodes_per_epoch = 100
 
 # Other parameters
-frame_repeat = 12
 resolution = (30, 45)
-episodes_to_watch = 10
+frame_repeat = 12
+episodes_to_watch = 20
 
-model_savefile = "./model-doom.pth"
+model_savefile = "./model-doom-delay.pth"
 save_model = True
 load_model = False
 skip_learning = False
+delay_response = True
+
 
 # Configuration file path
-config_file_path = os.path.join(vzd.scenarios_path, "basic.cfg")
+config_file_path = "./test.cfg"
 # config_file_path = os.path.join(vzd.scenarios_path, "rocket_basic.cfg")
 # config_file_path = os.path.join(vzd.scenarios_path, "basic.cfg")
 
@@ -109,35 +111,17 @@ def run(game, agent, actions, num_epochs, frame_repeat, steps_per_epoch=2000):
     """
 
     start_time = time()
-    actionIndex = [x for x in range(len(actions))]
 
     for epoch in range(num_epochs):
         game.new_episode()
-        time_check = time() * 1000
         train_scores = []
         global_step = 0
-        previous_action = None
         print(f"\nEpoch #{epoch + 1}")
         for _ in trange(steps_per_epoch, leave=False):
             state = preprocess(game.get_state().screen_buffer)
-            if time_check - time() * 1000 > 250:
-                action = agent.get_action(state)
-            else:
-                current_time = time() * 1000
-                current_move = agent.get_action(state)
-                action_queue.append([current_move, current_time])
-                actionTime = action_queue[-1]
-                if actionTime[1] - time_check > 250:
-                    time_check = actionTime[1]
-                    action_info = action_queue.pop()
-                    action = action_info[0]
-                    previous_action = action_info
-                elif previous_action:
-                    action = previous_action[0]
-                    time_check = time()
-                else:
-                    action = random.choice(actionIndex)
-
+            action = agent.get_action(state)
+            if delay_response:
+                frame_repeat = random.randint(9, 15)
             reward = game.make_action(actions[action], frame_repeat)
             done = game.is_episode_finished()
 
@@ -258,8 +242,8 @@ class DQNAgent:
 
         if load_model:
             print("Loading model from: ", model_savefile)
-            self.q_net = torch.load(model_savefile)
-            self.target_net = torch.load(model_savefile)
+            self.q_net = torch.load(model_savefile, weights_only=False)
+            self.target_net = torch.load(model_savefile, weights_only=False)
             self.epsilon = self.epsilon_min
 
         else:
@@ -371,6 +355,7 @@ if __name__ == "__main__":
 
             # Instead of make_action(a, frame_repeat) in order to make the animation smooth
             game.set_action(actions[best_action_index])
+            frame_repeat = random.randint(9, 15)
             for _ in range(frame_repeat):
                 game.advance_action()
 
